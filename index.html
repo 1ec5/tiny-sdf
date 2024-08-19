@@ -21,6 +21,9 @@ a { color: #0af; }
         <label>Font weight</label> <input id="fontweight" type="range" min="100" max="900" step="100" value="400">
     </p>
     <canvas id="canvas" width="1000" height="400"></canvas>
+	<canvas id="canvasRed" width="1000" height="400"></canvas>
+	<canvas id="canvasGreen" width="1000" height="400"></canvas>
+	<canvas id="canvasBlue" width="1000" height="400"></canvas>
     <p id="log"></p>
     <p>
         <label>Size</label> <input type="range" value="128" step="0.01" min="16" max="256.0" id="scale">
@@ -40,12 +43,18 @@ const chars = '🇦🇶ĝक्षि🦽👩🏽‍🦽😍𢄂𡔖城泽材灭
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+const canvasRed = document.getElementById('canvasRed');
+const ctxRed = canvasRed.getContext('2d');
+const canvasGreen = document.getElementById('canvasGreen');
+const ctxGreen = canvasGreen.getContext('2d');
+const canvasBlue = document.getElementById('canvasBlue');
+const ctxBlue = canvasBlue.getContext('2d');
 const segmenter = new Intl.Segmenter();
 
 const sdfs = {};
 
 // Convert alpha-only to RGBA so we can use `putImageData` for building the composite bitmap
-function makeRGBAImageData(alphaChannel, width, height) {
+function makeRGBAImageData(ctx, alphaChannel, width, height) {
     const imageData = ctx.createImageData(width, height);
     for (let i = 0; i < alphaChannel.length; i++) {
         imageData.data[4 * i + 0] = alphaChannel[i];
@@ -58,6 +67,9 @@ function makeRGBAImageData(alphaChannel, width, height) {
 
 function updateSDF() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctxRed.clearRect(0, 0, canvas.width, canvas.height);
+    ctxGreen.clearRect(0, 0, canvas.width, canvas.height);
+    ctxBlue.clearRect(0, 0, canvas.width, canvas.height);
     const fontSize = +document.getElementById('fontsize').value;
     const fontWeight = +document.getElementById('fontweight').value;
     const fontStyle = 'normal';
@@ -72,8 +84,11 @@ function updateSDF() {
     let segment = segments.next();
     for (let y = 0; y + size <= canvas.height && !segment.done; y += size) {
         for (let x = 0; x + size <= canvas.width && !segment.done; x += size) {
-            const {data, width, height} = sdf.draw(segment.value.segment);
-            ctx.putImageData(makeRGBAImageData(data, width, height), x, y);
+            const {data, dataRed, dataGreen, dataBlue, width, height} = sdf.draw(segment.value.segment);
+            ctx.putImageData(makeRGBAImageData(ctx, data, width, height), x, y);
+            ctxRed.putImageData(makeRGBAImageData(ctxRed, dataRed, width, height), x, y);
+            ctxGreen.putImageData(makeRGBAImageData(ctxGreen, dataGreen, width, height), x, y);
+            ctxBlue.putImageData(makeRGBAImageData(ctxBlue, dataBlue, width, height), x, y);
             sdfs[segment.value.segment] = {x, y};
             i++;
             segment = segments.next();
@@ -139,6 +154,9 @@ gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE);
 gl.enable(gl.BLEND);
 
 const texture = gl.createTexture();
+const textureRed = gl.createTexture();
+const textureGreen = gl.createTexture();
+const textureBlue = gl.createTexture();
 
 const vertexBuffer = gl.createBuffer();
 const textureBuffer = gl.createBuffer();
@@ -234,6 +252,42 @@ function drawGL() {
     gl.uniform1f(shader.u_buffer, 0.75);
     gl.uniform1f(shader.u_gamma, gamma * 1.4142 / scale);
     gl.drawArrays(gl.TRIANGLES, 0, vertexBuffer.numItems);
+
+    gl.enable(gl.BLEND);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, textureRed);
+    gl.uniform1i(shader.u_texture, 0);
+
+    gl.uniform4fv(shader.u_color, [1, 0, 0, 1]);
+    gl.uniform1f(shader.u_buffer, 0.75);
+    gl.uniform1f(shader.u_gamma, gamma * 1.4142 / scale);
+    gl.drawArrays(gl.TRIANGLES, 0, vertexBuffer.numItems);
+
+    gl.enable(gl.BLEND);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, textureGreen);
+    gl.uniform1i(shader.u_texture, 0);
+
+    gl.uniform4fv(shader.u_color, [0, 1, 0, 1]);
+    gl.uniform1f(shader.u_buffer, 0.75);
+    gl.uniform1f(shader.u_gamma, gamma * 1.4142 / scale);
+    gl.drawArrays(gl.TRIANGLES, 0, vertexBuffer.numItems);
+
+    gl.enable(gl.BLEND);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, textureBlue);
+    gl.uniform1i(shader.u_texture, 0);
+
+    gl.uniform4fv(shader.u_color, [0, 0, 1, 1]);
+    gl.uniform1f(shader.u_buffer, 0.75);
+    gl.uniform1f(shader.u_gamma, gamma * 1.4142 / scale);
+    gl.drawArrays(gl.TRIANGLES, 0, vertexBuffer.numItems);
 }
 
 document.getElementById('fontsize').oninput = frame;
@@ -255,9 +309,33 @@ function update() {
     updateSDF();
 
     const sdfData = new Uint8Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+    const sdfDataRed = new Uint8Array(ctxRed.getImageData(0, 0, canvas.width, canvas.height).data);
+    const sdfDataGreen = new Uint8Array(ctxGreen.getImageData(0, 0, canvas.width, canvas.height).data);
+    const sdfDataBlue = new Uint8Array(ctxBlue.getImageData(0, 0, canvas.width, canvas.height).data);
 
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, sdfData);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    gl.bindTexture(gl.TEXTURE_2D, textureRed);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, sdfDataRed);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    gl.bindTexture(gl.TEXTURE_2D, textureGreen);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, sdfDataGreen);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    gl.bindTexture(gl.TEXTURE_2D, textureBlue);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, sdfDataBlue);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);

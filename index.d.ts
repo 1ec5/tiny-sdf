@@ -12,6 +12,9 @@ export default class TinySDF {
     constructor(options: TinySDFOptions);
     draw(char: string): {
         data: Uint8ClampedArray;
+        dataRed: Uint8ClampedArray;
+        dataGreen: Uint8ClampedArray;
+        dataBlue: Uint8ClampedArray;
         width: number;
         height: number;
         glyphWidth: number;

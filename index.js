@@ -8,7 +8,7 @@ export default class TinySDF {
         cutoff = 0.25,
         fontFamily = 'sans-serif',
         fontWeight = 'normal',
-        fontStyle = 'normal'
+        fontStyle = 'normal',
     } = {}) {
         this.buffer = buffer;
         this.cutoff = cutoff;
@@ -63,7 +63,10 @@ export default class TinySDF {
 
         const len = Math.max(width * height, 0);
         const data = new Uint8ClampedArray(len);
-        const glyph = {data, width, height, glyphWidth, glyphHeight, glyphTop, glyphLeft, glyphAdvance};
+        const dataRed = new Uint8ClampedArray(len);
+        const dataGreen = new Uint8ClampedArray(len);
+        const dataBlue = new Uint8ClampedArray(len);
+        const glyph = {data, dataRed, dataGreen, dataBlue, width, height, glyphWidth, glyphHeight, glyphTop, glyphLeft, glyphAdvance};
         if (glyphWidth === 0 || glyphHeight === 0) return glyph;
 
         const {ctx, buffer, gridInner, gridOuter} = this;
@@ -71,36 +74,42 @@ export default class TinySDF {
         ctx.fillText(char, buffer, buffer + glyphTop);
         const imgData = ctx.getImageData(buffer, buffer, glyphWidth, glyphHeight);
 
-        // Initialize grids outside the glyph range to alpha 0
-        gridOuter.fill(INF, 0, len);
-        gridInner.fill(0, 0, len);
+        const sampleChannel = (data, channelIndex) => {
+            // Initialize grids outside the glyph range to alpha 0
+            gridOuter.fill(INF, 0, len);
+            gridInner.fill(0, 0, len);
 
-        for (let y = 0; y < glyphHeight; y++) {
-            for (let x = 0; x < glyphWidth; x++) {
-                const a = imgData.data[4 * (y * glyphWidth + x) + 3] / 255; // alpha value
-                if (a === 0) continue; // empty pixels
+            for (let y = 0; y < glyphHeight; y++) {
+                for (let x = 0; x < glyphWidth; x++) {
+                    const value = imgData.data[4 * (y * glyphWidth + x) + channelIndex] / 255;
+                    if (value === 0) continue; // empty pixels
 
-                const j = (y + buffer) * width + x + buffer;
+                    const j = (y + buffer) * width + x + buffer;
 
-                if (a === 1) { // fully drawn pixels
-                    gridOuter[j] = 0;
-                    gridInner[j] = INF;
+                    if (value === 1) { // fully drawn pixels
+                        gridOuter[j] = 0;
+                        gridInner[j] = INF;
 
-                } else { // aliased pixels
-                    const d = 0.5 - a;
-                    gridOuter[j] = d > 0 ? d * d : 0;
-                    gridInner[j] = d < 0 ? d * d : 0;
+                    } else { // aliased pixels
+                        const d = 0.5 - value;
+                        gridOuter[j] = d > 0 ? d * d : 0;
+                        gridInner[j] = d < 0 ? d * d : 0;
+                    }
                 }
             }
-        }
 
-        edt(gridOuter, 0, 0, width, height, width, this.f, this.v, this.z);
-        edt(gridInner, buffer, buffer, glyphWidth, glyphHeight, width, this.f, this.v, this.z);
+            edt(gridOuter, 0, 0, width, height, width, this.f, this.v, this.z);
+            edt(gridInner, buffer, buffer, glyphWidth, glyphHeight, width, this.f, this.v, this.z);
 
-        for (let i = 0; i < len; i++) {
-            const d = Math.sqrt(gridOuter[i]) - Math.sqrt(gridInner[i]);
-            data[i] = Math.round(255 - 255 * (d / this.radius + this.cutoff));
-        }
+            for (let i = 0; i < len; i++) {
+                const d = Math.sqrt(gridOuter[i]) - Math.sqrt(gridInner[i]);
+                data[i] = Math.round(255 - 255 * (d / this.radius + this.cutoff));
+            }
+        };
+        sampleChannel(data, 3); // alpha
+        sampleChannel(dataRed, 0);
+        sampleChannel(dataGreen, 1);
+        sampleChannel(dataBlue, 2);
 
         return glyph;
     }

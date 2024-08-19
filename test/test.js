@@ -50,7 +50,7 @@ test('draws an SDF given a character', () => {
         this.putImageData(nodeCanvas.createImageData(new Uint8ClampedArray(png.data.buffer), png.width), 0, 0);
     };
 
-    const {data, ...metrics} = sdf.draw('材');
+    const {data, dataRed, dataGreen, dataBlue, ...metrics} = sdf.draw('材');
 
     if (process.env.UPDATE) {
         writeFileSync(outMetricsUrl, JSON.stringify(metrics, null, 2));
@@ -80,6 +80,12 @@ test('draws an SDF given a character', () => {
     const numDiffPixels = pixelmatch(expectedImg, actualImg, undefined, width, height, {threshold: 0, includeAA: true});
 
     assert.equal(numDiffPixels, 0, 'SDF pixels');
+
+    const expectedRgb = new Uint8ClampedArray(data.length);
+    expectedRgb.fill(0);
+    assert.deepEqual(expectedRgb, dataRed);
+    assert.deepEqual(expectedRgb, dataGreen);
+    assert.deepEqual(expectedRgb, dataBlue);
 });
 
 test('does not crash on diacritic marks', () => {
