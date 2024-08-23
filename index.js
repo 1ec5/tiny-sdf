@@ -8,7 +8,8 @@ export default class TinySDF {
         cutoff = 0.25,
         fontFamily = 'sans-serif',
         fontWeight = 'normal',
-        fontStyle = 'normal'
+        fontStyle = 'normal',
+        textBaseline = 'alphabetic'
     } = {}) {
         this.buffer = buffer;
         this.cutoff = cutoff;
@@ -22,7 +23,7 @@ export default class TinySDF {
         const ctx = this.ctx = canvas.getContext('2d', {willReadFrequently: true});
         ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
 
-        ctx.textBaseline = 'alphabetic';
+        ctx.textBaseline = textBaseline;
         ctx.textAlign = 'left'; // Necessary so that RTL text doesn't have different alignment
         ctx.fillStyle = 'black';
 
@@ -46,8 +47,23 @@ export default class TinySDF {
             actualBoundingBoxAscent,
             actualBoundingBoxDescent,
             actualBoundingBoxLeft,
-            actualBoundingBoxRight
+            actualBoundingBoxRight,
+            alphabeticBaseline,
+            hangingBaseline,
+            ideographicBaseline,
         } = this.ctx.measureText(char);
+
+        let glyphBaseline;
+        switch (this.ctx.textBaseline) {
+        case 'hanging':
+            glyphBaseline = hangingBaseline;
+            break;
+        case 'ideographic':
+            glyphBaseline = ideographicBaseline;
+            break;
+        default:
+            glyphBaseline = alphabeticBaseline;
+        }
 
         // The integer/pixel part of the top alignment is encoded in metrics.glyphTop
         // The remainder is implicitly encoded in the rasterization
@@ -63,7 +79,7 @@ export default class TinySDF {
 
         const len = Math.max(width * height, 0);
         const data = new Uint8ClampedArray(len);
-        const glyph = {data, width, height, glyphWidth, glyphHeight, glyphTop, glyphLeft, glyphAdvance};
+        const glyph = {data, width, height, glyphWidth, glyphHeight, glyphTop, glyphLeft, glyphAdvance, glyphBaseline};
         if (glyphWidth === 0 || glyphHeight === 0) return glyph;
 
         const {ctx, buffer, gridInner, gridOuter} = this;

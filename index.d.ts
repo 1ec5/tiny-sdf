@@ -6,6 +6,7 @@ export declare type TinySDFOptions = {
     fontFamily?: string;
     fontWeight?: string;
     fontStyle?: string;
+    textBaseline?: string;
 };
 
 export default class TinySDF {
@@ -19,5 +20,6 @@ export default class TinySDF {
         glyphTop: number;
         glyphLeft: number;
         glyphAdvance: number;
+        glyphBaseline: number;
     };
 }
